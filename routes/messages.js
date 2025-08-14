@@ -5,16 +5,30 @@ const authMiddleware = require("../middleware/authmiddleware");
 const multer = require("multer");
 const upload = multer({ dest: "uploads/" });
 
-// ---- Get all conversations ----
-router.get("/", authMiddleware, async (req, res) => {
+// Helper to validate IDs (no full URLs)
+const isValidId = (id) => /^[\w-]+$/.test(id);
+
+// ---- Send text message ----
+router.post("/send", authMiddleware, async (req, res) => {
   try {
-    // You may implement aggregation to group messages by conversation
-    const messages = await Message.find().sort({ createdAt: 1 });
-    res.json(messages);
+    const newMessage = await Message.create({
+      wa_id: req.body.wa_id,
+      from: req.body.from,
+      to: req.body.to,
+      text: req.body.text,
+      createdAt: new Date(),
+      status: "sent",
+      unread: true,
+    });
+
+    req.app.get("io").emit("newMessage", newMessage);
+    res.status(201).json(newMessage);
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ---- Send group message ----
 router.post("/sendGroup", authMiddleware, async (req, res) => {
   const { groupId, from, text } = req.body;
 
@@ -33,53 +47,6 @@ router.post("/sendGroup", authMiddleware, async (req, res) => {
   res.json(groupMessage);
 });
 
-
-// ---- Get messages for a conversation ----
-router.get("/:wa_id", authMiddleware, async (req, res) => {
-  try {
-    const messages = await Message.find({ wa_id: req.params.wa_id }).sort({
-      createdAt: 1,
-    });
-    res.json(messages);
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ---- Get user info by wa_id ----
-router.get("/user/:wa_id", authMiddleware, async (req, res) => {
-  try {
-    const message = await Message.findOne({ wa_id: req.params.wa_id });
-    if (!message) return res.json({ name: "Unknown", number: req.params.wa_id });
-    res.json({ name: message.name || "Unknown", number: req.params.wa_id });
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// ---- Send text message ----
-router.post("/send", authMiddleware, async (req, res) => {
-  try {
-    const newMessage = await Message.create({
-      wa_id: req.body.wa_id,
-      from: req.body.from,
-      to: req.body.to,
-      text: req.body.text,
-      createdAt: new Date(),
-      status: "sent",
-      unread: true,
-    });
-    await newMessage.save();
-
-    // Emit to all connected clients
-    req.app.get("io").emit("newMessage", newMessage);
-
-    res.status(201).json(newMessage);
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
 // ---- Send media message ----
 router.post("/sendMedia", authMiddleware, upload.single("file"), async (req, res) => {
   try {
@@ -95,10 +62,7 @@ router.post("/sendMedia", authMiddleware, upload.single("file"), async (req, res
       unread: true,
     });
 
-    await newMessage.save();
-
     req.app.get("io").emit("newMessage", newMessage);
-
     res.status(201).json(newMessage);
   } catch (err) {
     res.status(500).json({ error: "Server error" });
@@ -108,11 +72,48 @@ router.post("/sendMedia", authMiddleware, upload.single("file"), async (req, res
 // ---- Mark messages as read ----
 router.post("/markRead/:wa_id", authMiddleware, async (req, res) => {
   try {
+    if (!isValidId(req.params.wa_id)) return res.status(400).json({ error: "Invalid ID" });
+
     await Message.updateMany(
       { wa_id: req.params.wa_id, unread: true },
       { $set: { unread: false, status: "read" } }
     );
     res.json({ message: "Marked as read"});
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ---- Get user info by wa_id ----
+router.get("/user/:wa_id", authMiddleware, async (req, res) => {
+  try {
+    if (!isValidId(req.params.wa_id)) return res.status(400).json({ error: "Invalid ID" });
+
+    const message = await Message.findOne({ wa_id: req.params.wa_id });
+    if (!message) return res.json({ name: "Unknown", number: req.params.wa_id });
+    res.json({ name: message.name || "Unknown", number: req.params.wa_id });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ---- Get messages for a conversation ----
+router.get("/:wa_id", authMiddleware, async (req, res) => {
+  try {
+    if (!isValidId(req.params.wa_id)) return res.status(400).json({ error: "Invalid ID" });
+
+    const messages = await Message.find({ wa_id: req.params.wa_id }).sort({ createdAt: 1 });
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ---- Get all conversations ----
+router.get("/", authMiddleware, async (req, res) => {
+  try {
+    const messages = await Message.find().sort({ createdAt: 1 });
+    res.json(messages);
   } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
