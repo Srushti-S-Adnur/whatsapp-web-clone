@@ -12,7 +12,7 @@ const app = express();
 // Update CORS for both Express and Socket.IO
 const allowedOrigins = [
   'http://localhost:5173', // local frontend
-  'https://your-frontend-url.vercel.app' // replace with your deployed frontend URL
+  'https://whatsapp-frontend-puce.vercel.app/' // replace with your deployed frontend URL
 ];
 
 app.use(cors({
