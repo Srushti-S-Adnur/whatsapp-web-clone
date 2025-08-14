@@ -9,7 +9,11 @@ const path = require('path');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+    origin: "https://whatsapp-frontend-puce.vercel.app/",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}));
 app.use(express.json());
 
 // Serve uploads folder statically
