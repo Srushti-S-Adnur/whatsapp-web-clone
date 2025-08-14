@@ -9,11 +9,11 @@ const path = require('path');
 
 const app = express();
 
-// ✅ CORS setup for both local dev & deployed frontend
+// CORS setup
 app.use(cors({
   origin: [
-    "https://whatsapp-frontend-puce.vercel.app/", // Change to your actual deployed frontend URL
-    "http://localhost:5173" // Keep for local development
+    "http://localhost:5173", // for local dev
+    "https://whatsapp-clone.vercel.app" // your deployed frontend
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
@@ -21,23 +21,10 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ Security headers
-app.disable("x-powered-by");
-app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  next();
-});
-
 // Serve uploads folder statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Serve frontend in production
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "../frontend/build")));
-  app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
-  });
-}
+// 🚫 Removed the production static frontend serve block
 
 const server = http.createServer(app);
 
@@ -45,8 +32,8 @@ const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
     origin: [
-      "https://whatsapp-frontend-puce.vercel.app/", // Same as above
-      "http://localhost:5173"
+      "http://localhost:5173",
+      "https://whatsapp-clone.vercel.app"
     ],
     methods: ["GET", "POST"]
   }
@@ -62,7 +49,6 @@ io.on('connection', socket => {
     io.emit("updateUserStatus", { userId, status: "online" });
   });
 
-  // Typing events
   socket.on("typing", (data) => {
     socket.broadcast.emit("typing", data);
   });
@@ -84,13 +70,12 @@ io.on('connection', socket => {
 
 app.set('io', io);
 
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('✅ MongoDB connected'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
+// Routes
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
@@ -98,7 +83,7 @@ const messageRoutes = require('./routes/messages');
 app.use('/api/messages', messageRoutes);
 
 const groupRoutes = require("./routes/groups");
-app.use("/api/groups", groupRoutes); 
+app.use("/api/groups", groupRoutes);
 
 app.get('/', (req, res) => {
   res.send('WhatsApp Clone Backend OK');
