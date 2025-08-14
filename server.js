@@ -9,13 +9,15 @@ const path = require('path');
 
 const app = express();
 
-// CORS setup
+// Update CORS for both Express and Socket.IO
+const allowedOrigins = [
+  'http://localhost:5173', // local frontend
+  'https://your-frontend-url.vercel.app' // replace with your deployed frontend URL
+];
+
 app.use(cors({
-  origin: [
-    "http://localhost:5173", // for local dev
-    "https://whatsapp-clone.vercel.app" // your deployed frontend
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
 
@@ -24,17 +26,20 @@ app.use(express.json());
 // Serve uploads folder statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// 🚫 Removed the production static frontend serve block
+// Serve frontend build in production
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/build")));
+  app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
+  });
+}
 
 const server = http.createServer(app);
 
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://whatsapp-clone.vercel.app"
-    ],
+    origin: allowedOrigins,
     methods: ["GET", "POST"]
   }
 });
@@ -70,12 +75,13 @@ io.on('connection', socket => {
 
 app.set('io', io);
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('✅ MongoDB connected'))
+.catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Routes
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
