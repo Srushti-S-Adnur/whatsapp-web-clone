@@ -9,17 +9,24 @@ const path = require('path');
 
 const app = express();
 
-// ✅ CORS setup — allow frontend from Vercel + local dev
+// ✅ CORS setup for both local dev & deployed frontend
 app.use(cors({
   origin: [
-    "http://localhost:5173",              // local frontend
-    "https://whatsapp-frontend-puce.vercel.app/"  // replace with your actual Vercel frontend URL
+    "https://whatsapp-frontend-puce.vercel.app/", // Change to your actual deployed frontend URL
+    "http://localhost:5173" // Keep for local development
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
 
 app.use(express.json());
+
+// ✅ Security headers
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
 
 // Serve uploads folder statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -38,11 +45,10 @@ const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
     origin: [
-      "http://localhost:5173",
-      "https://whatsapp-frontend-puce.vercel.app/" // replace here too
+      "https://whatsapp-frontend-puce.vercel.app/", // Same as above
+      "http://localhost:5173"
     ],
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ["GET", "POST"]
   }
 });
 
@@ -56,6 +62,7 @@ io.on('connection', socket => {
     io.emit("updateUserStatus", { userId, status: "online" });
   });
 
+  // Typing events
   socket.on("typing", (data) => {
     socket.broadcast.emit("typing", data);
   });
@@ -91,7 +98,7 @@ const messageRoutes = require('./routes/messages');
 app.use('/api/messages', messageRoutes);
 
 const groupRoutes = require("./routes/groups");
-app.use("/api/groups", groupRoutes);
+app.use("/api/groups", groupRoutes); 
 
 app.get('/', (req, res) => {
   res.send('WhatsApp Clone Backend OK');
