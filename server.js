@@ -9,38 +9,46 @@ const path = require('path');
 
 const app = express();
 
-// Update CORS for both Express and Socket.IO
+// ===== CORS CONFIG =====
 const allowedOrigins = [
-  'http://localhost:5173', // local frontend
-  'https://whatsapp-frontend-puce.vercel.app/' // replace with your deployed frontend URL
+  'http://localhost:5173', // Local frontend
+  'https://whatsapp-frontend-puce.vercel.app/' // Replace with your actual Vercel frontend URL
 ];
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like Postman) or from allowed origins
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS blocked: ' + origin));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
 
 app.use(express.json());
 
-// Serve uploads folder statically
+// ===== STATIC FILES =====
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Serve frontend build in production
+// Serve frontend build in production (optional if deploying backend separately)
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/build")));
-  app.get(/.*/, (req, res) => {
+  app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
   });
 }
 
+// ===== SOCKET.IO =====
 const server = http.createServer(app);
-
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -75,6 +83,7 @@ io.on('connection', socket => {
 
 app.set('io', io);
 
+// ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -82,18 +91,15 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => console.log('✅ MongoDB connected'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
-const authRoutes = require("./routes/auth");
-app.use("/api/auth", authRoutes);
-
-const messageRoutes = require('./routes/messages');
-app.use('/api/messages', messageRoutes);
-
-const groupRoutes = require("./routes/groups");
-app.use("/api/groups", groupRoutes);
+// ===== ROUTES =====
+app.use("/api/auth", require("./routes/auth"));
+app.use('/api/messages', require('./routes/messages'));
+app.use("/api/groups", require("./routes/groups"));
 
 app.get('/', (req, res) => {
   res.send('WhatsApp Clone Backend OK');
 });
 
+// ===== START SERVER =====
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
